@@ -1,0 +1,93 @@
+name: Repo hygiene
+
+# Audits every public repo on the account for leaked secret files, bare
+# descriptions, missing topics, and the search-visibility assets that silently
+# stop working if a file is deleted.
+#
+# Read-only against public data, so the built-in GITHUB_TOKEN is enough and no
+# secrets are required. Writing fixes would need a PAT with repo scope; this
+# workflow deliberately does not do that.
+
+on:
+  schedule:
+    # Mondays 04:00 UTC = 09:30 IST. GitHub disables scheduled workflows on
+    # repos with no commits for 60 days, so a quiet account will need a manual
+    # run to wake this back up.
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run audit
+        id: audit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The script exits 1 on warnings and 2 on critical findings, which is
+          # the signal we want - so don't let a non-zero exit kill the step
+          # before the report has been published.
+          set +e
+          node scripts/repo-hygiene.mjs | tee report.txt
+          code=${PIPESTATUS[0]}
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Audit exited $code"
+
+      - name: Publish report to the run summary
+        if: always()
+        run: |
+          {
+            echo "## Repo hygiene"
+            echo ""
+            echo '```'
+            cat report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open or update the tracking issue
+        if: steps.audit.outputs.code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Repo hygiene: findings need attention"
+          body=$(printf '%s\n\n```\n%s\n```\n\n_Updated by the Repo hygiene workflow. Closes itself when a later run comes back clean._' \
+            "Latest audit found issues across the account." "$(cat report.txt)")
+
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+            echo "commented on #$existing"
+          else
+            gh issue create --title "$title" --body "$body" --label "" || gh issue create --title "$title" --body "$body"
+          fi
+
+      - name: Close the tracking issue when clean
+        if: steps.audit.outputs.code == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing=$(gh issue list --state open --search "Repo hygiene: findings need attention in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue close "$existing" --comment "Audit is clean again - closing."
+            echo "closed #$existing"
+          else
+            echo "clean, nothing open"
+          fi
+
+      - name: Fail the run on critical findings
+        if: steps.audit.outputs.code == '2'
+        run: |
+          echo "Critical findings: something is exposed, or search verification is broken."
+          exit 1
