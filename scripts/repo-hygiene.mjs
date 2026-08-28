@@ -38,13 +38,21 @@ const gh = (args) => {
 };
 const ghJson = (args) => { const o = gh(args); try { return o ? JSON.parse(o) : null; } catch { return null; } };
 
-async function httpOk(url) {
-  try {
-    const r = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(12000) });
-    return { ok: r.ok, status: r.status, body: r.ok ? await r.text() : "" };
-  } catch (e) {
-    return { ok: false, status: 0, body: "", error: String(e).slice(0, 120) };
+// A CI runner blipping the network is not the same as a file being deleted.
+// Retry, and only call it critical when the server actually answered with an
+// error status - an unreachable host stays a warning so this never cries wolf.
+async function httpOk(url, attempts = 3) {
+  let last = { ok: false, status: 0, body: "", error: "not attempted" };
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(15000) });
+      return { ok: r.ok, status: r.status, body: r.ok ? await r.text() : "", reachable: true };
+    } catch (e) {
+      last = { ok: false, status: 0, body: "", error: String(e).slice(0, 120), reachable: false };
+      if (i < attempts - 1) await new Promise((res) => setTimeout(res, 2000 * (i + 1)));
+    }
   }
+  return last;
 }
 
 function auditRepos() {
@@ -89,8 +97,10 @@ async function auditSite() {
   const home = await httpOk(SITE + "/");
 
   if (!home.ok) {
-    findings.push({ severity: "critical", repo: "site", kind: "site-down",
-      detail: `${SITE}/ returned ${home.status}`, fix: "check GitHub Pages build" });
+    const unreachable = home.reachable === false;
+    findings.push({ severity: unreachable ? "warn" : "critical", repo: "site", kind: "site-down",
+      detail: unreachable ? `${SITE}/ unreachable after 3 attempts (${home.error})` : `${SITE}/ returned ${home.status}`,
+      fix: unreachable ? "probably transient; re-run" : "check GitHub Pages build" });
     return findings;
   }
 
@@ -104,9 +114,12 @@ async function auditSite() {
   for (const c of checks) {
     const r = await httpOk(SITE + c.path);
     if (!r.ok) {
-      findings.push({ severity: "critical", repo: "site", kind: c.kind,
-        detail: `${c.path} returned ${r.status} — search verification breaks without it`,
-        fix: `restore ${c.path} in the hanishchow.github.io repo` });
+      const unreachable = r.reachable === false;
+      findings.push({ severity: unreachable ? "warn" : "critical", repo: "site", kind: c.kind,
+        detail: unreachable
+          ? `${c.path} unreachable after 3 attempts (${r.error}) — probably transient, verify by hand`
+          : `${c.path} returned ${r.status} — search verification breaks without it`,
+        fix: unreachable ? `curl -I ${SITE}${c.path}` : `restore ${c.path} in the hanishchow.github.io repo` });
     }
   }
 
