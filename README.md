@@ -31,6 +31,10 @@ kiosk that actually prints: QR upload, UPI payment, staff confirmation.
 **[city-shield](https://github.com/Hanishchow/city-shield)** — Bengaluru citizen emergency
 platform. One incident record, shared by every responding agency.
 
+### Selected
+
+**AIR 30 — AIGK Olympiad** (All India Rank 30)
+
 ### Areas
 
 Machine learning and agent orchestration · computational biology · physics simulation ·
