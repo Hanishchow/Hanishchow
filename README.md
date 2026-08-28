@@ -33,7 +33,8 @@ platform. One incident record, shared by every responding agency.
 
 ### Selected
 
-**AIR 30 — All India General Knowledge Olympiad, 2018**
+**AIR 30 — All India General Knowledge Examination**, 2018
+Centre for Human Resource Development, Bengaluru
 
 ### Areas
 
