@@ -33,7 +33,7 @@ platform. One incident record, shared by every responding agency.
 
 ### Selected
 
-**AIR 30 — AIGK Olympiad** (All India Rank 30)
+**AIR 30 — All India General Knowledge Olympiad, 2018**
 
 ### Areas
 
