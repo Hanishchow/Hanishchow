@@ -31,6 +31,14 @@ kiosk that actually prints: QR upload, UPI payment, staff confirmation.
 **[city-shield](https://github.com/Hanishchow/city-shield)** — Bengaluru citizen emergency
 platform. One incident record, shared by every responding agency.
 
+### Contributing upstream
+
+**[pymol-claude-plugin](https://github.com/stepdasha/pymol-claude-plugin/pull/1)** — a plugin that
+drives PyMOL from plain English. Failed PyMOL commands were coming back to the model as successes,
+so it kept building on state that didn't exist; fixed that and the shared-state races that could
+corrupt a session for good. Added a tool that ray-traces the viewport so the model can look at what
+it actually made. 79 tests against real PyMOL.
+
 ### Selected
 
 **AIR 30 — All India General Knowledge Examination**, 2018
